@@ -3,6 +3,7 @@ import os
 import yaml
 from pathlib import Path
 from typing import Any
+import copy
 
 
 DEFAULT_CONFIG = {
@@ -34,13 +35,20 @@ DEFAULT_CONFIG = {
         "pollinations": {
             "enabled": True,
         },
+        "custom": {
+            "enabled": False,
+            "api_key_env": "CUSTOM_API_KEY",
+            "base_url_env": "CUSTOM_IMAGE_BASE_URL",
+            "model_env": "CUSTOM_IMAGE_MODEL",
+        },
     },
 }
 
 
 class Config:
     def __init__(self, config_path: str | None = None):
-        self.config = DEFAULT_CONFIG.copy()
+        # Deep copy to avoid mutating DEFAULT_CONFIG
+        self.config = copy.deepcopy(DEFAULT_CONFIG)
         self._load_config(config_path)
         self._load_env()
 
@@ -57,6 +65,16 @@ class Config:
                 env_var = provider_config["api_key_env"]
                 if env_var in os.environ:
                     provider_config["api_key"] = os.environ[env_var]
+            # Support env-based base_url and model for custom provider
+            if provider_name == "custom":
+                if "base_url_env" in provider_config:
+                    env_var = provider_config.pop("base_url_env")
+                    if env_var in os.environ:
+                        provider_config["base_url"] = os.environ[env_var]
+                if "model_env" in provider_config:
+                    env_var = provider_config.pop("model_env")
+                    if env_var in os.environ:
+                        provider_config["model"] = os.environ[env_var]
 
     def _deep_merge(self, base: dict, override: dict):
         for key, value in override.items():

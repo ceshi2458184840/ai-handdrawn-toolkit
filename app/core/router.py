@@ -22,6 +22,14 @@ _PROFILES = {
         "supports_negative": True,
         "multiple_outputs": True,
     },
+    "custom": {
+        "quality_tier": "unknown",
+        "watermark_risk": "unknown",
+        "supports_reference": False,
+        "supports_edit": False,
+        "supports_negative": True,
+        "multiple_outputs": True,
+    },
     "pollinations": {
         "quality_tier": "medium",
         "watermark_risk": "possible",
@@ -45,7 +53,17 @@ def build_providers(config, quality_mode: str = "normal"):
                 model=config.get("providers.gemini.model", "gemini-2.5-flash-image"),
             )
         )
-    # OpenAI-compatible custom endpoint
+    # OpenAI direct
+    openai_key = config.get("providers.openai.api_key")
+    if openai_key:
+        providers.append(
+            OpenAICompatibleProvider(
+                api_key=openai_key,
+                base_url=config.get("providers.openai.base_url", "https://api.openai.com/v1"),
+                model=config.get("providers.openai.model", "gpt-image-2.5"),
+            )
+        )
+    # Custom OpenAI-compatible endpoint
     custom_key = config.get("providers.custom.api_key")
     custom_url = config.get("providers.custom.base_url")
     custom_model = config.get("providers.custom.model")

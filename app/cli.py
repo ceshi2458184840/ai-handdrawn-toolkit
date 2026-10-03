@@ -2,6 +2,7 @@
 import argparse
 import sys
 import json
+import time
 from app.core.config import Config
 from app.core.router import resolve_provider, build_providers
 from app.core.prompt_compiler import PromptCompiler
@@ -41,14 +42,21 @@ def _generate_with_retry(provider, prompt, negative, width, height, max_attempts
             )
         except HanddrawnError as e:
             last_error = e
-            # Only retry on transient errors
             if e.code in (ErrorCode.NETWORK_ERROR, ErrorCode.TIMEOUT, ErrorCode.RATE_LIMIT, ErrorCode.PROVIDER_ERROR):
+                time.sleep(1.0 * (attempt + 1))
                 continue
             raise
         except Exception as e:
             last_error = e
+            time.sleep(1.0 * (attempt + 1))
             continue
     raise last_error or HanddrawnError(ErrorCode.PROVIDER_ERROR, "Generation failed after retries.")
+
+
+def _safe_filename(prompt: str, style: str) -> str:
+    """Generate a deterministic, filesystem-safe filename."""
+    safe = prompt.replace(" ", "_").replace("/", "_").replace("\\", "_")[:40]
+    return f"generated/{style}_{safe}.png"
 
 
 def cmd_generate(args):
@@ -60,7 +68,11 @@ def cmd_generate(args):
 
     width = args.width or config.width
     height = args.height or config.height
-    candidates_needed = args.candidates or config.candidates
+    # Use explicit 0 as "no candidates" -> default to 1
+    if args.candidates is not None and args.candidates < 1:
+        candidates_needed = 1
+    else:
+        candidates_needed = args.candidates or config.candidates
     max_rounds = 2
 
     vision_key = config.get("providers.gemini.api_key")
@@ -99,13 +111,23 @@ def cmd_generate(args):
                     _print_candidate(idx, "REJECT", reason)
                     continue
 
-                # Gate 2: style mismatch
-                style_check = check_style_gate(style, positive)
-                if not style_check["pass"]:
-                    reason = f"STYLE_MISMATCH ({', '.join(style_check['violations'][:3])})"
-                    rejections.append({"candidate": idx, "reason": reason})
-                    _print_candidate(idx, "REJECT", reason)
-                    continue
+                # Gate 2: style mismatch (vision-based if available)
+                if vision_key:
+                    vision_result = judge_with_gemini(img.data, vision_key)
+                    style_match = vision_result.get("style_match", 5)
+                    if style_match < 6:
+                        reason = f"STYLE_MISMATCH (vision score {style_match}/10)"
+                        rejections.append({"candidate": idx, "reason": reason})
+                        _print_candidate(idx, "REJECT", reason)
+                        continue
+                else:
+                    # Fallback to prompt-based check
+                    style_check = check_style_gate(style, positive)
+                    if not style_check["pass"]:
+                        reason = f"STYLE_MISMATCH ({', '.join(style_check['violations'][:3])})"
+                        rejections.append({"candidate": idx, "reason": reason})
+                        _print_candidate(idx, "REJECT", reason)
+                        continue
 
                 # Gate 3: rendering mismatch (heuristic)
                 try:
@@ -146,33 +168,44 @@ def cmd_generate(args):
             print(f"  Candidate #{idx}  {sc:.1f}/10")
         print(f"\n✓ Selected best candidate ({best_score:.1f}/10)")
 
-    # Optional refinement if score < 7.8
+    # Optional refinement if score < 7.8 (only for providers that support editing)
     refined = False
     if best_score < 7.8 and vision_key:
         print("⚠️  Best score < 7.8, attempting one-pass refinement...")
-        try:
-            refined_prompt = (
-                positive
-                + ", confident graphite/fine-ink contours, natural line-weight variation, "
-                "reduce painterly color, reduce digital gloss, simplify background, "
-                "keep subject recognizable, do not add text or logos"
-            )
-            refined_imgs = _generate_with_retry(
-                best_img, refined_prompt, negative, width, height
-            )
-            if refined_imgs:
-                refined_img = refined_imgs[0]
-                wm2, _ = is_watermarked(refined_img.data, vision_api_key=vision_key)
-                if not wm2:
-                    best_img = refined_img
-                    refined = True
-                    print("✓ Refinement succeeded")
-                else:
-                    print("✗ Refinement produced watermark, keeping original")
-        except Exception as e:
-            print(f"✗ Refinement failed: {e}")
+        # Find a provider that supports editing for refinement
+        edit_provider = None
+        for p in providers:
+            if getattr(p, "supports_editing", False):
+                edit_provider = p
+                break
+        if not edit_provider:
+            # Fall back to first available provider with a simpler prompt
+            edit_provider = providers[0] if providers else None
+        
+        if edit_provider:
+            try:
+                refined_prompt = (
+                    positive
+                    + ", confident graphite/fine-ink contours, natural line-weight variation, "
+                    "reduce painterly color, reduce digital gloss, simplify background, "
+                    "keep subject recognizable, do not add text or logos"
+                )
+                refined_imgs = _generate_with_retry(
+                    edit_provider, refined_prompt, negative, width, height
+                )
+                if refined_imgs:
+                    refined_img = refined_imgs[0]
+                    wm2, _ = is_watermarked(refined_img.data, vision_api_key=vision_key)
+                    if not wm2:
+                        best_img = refined_img
+                        refined = True
+                        print("✓ Refinement succeeded")
+                    else:
+                        print("✗ Refinement produced watermark, keeping original")
+            except Exception as e:
+                print(f"✗ Refinement failed: {e}")
 
-    out = args.output or f"generated/{style}_{hash(args.prompt) % 10000}.png"
+    out = args.output or _safe_filename(args.prompt, style)
     with open(out, "wb") as f:
         f.write(best_img.data)
     print(f"Saved: {out}")
@@ -199,7 +232,7 @@ def cmd_providers(args):
     config = Config(args.config)
     print("Available providers:")
     profiles = {
-        "auto": "Gemini → OpenAI → FLUX → Pollinations",
+        "auto": "Gemini → OpenAI → Custom → Pollinations",
         "pollinations": "Free fallback (watermark risk: possible)",
         "gemini": "High quality (requires GEMINI_API_KEY)",
         "openai": "High quality (requires OPENAI_API_KEY)",
@@ -270,6 +303,7 @@ def main():
     p_prov.add_argument("--config", default="config.yaml")
 
     p_styles = sub.add_parser("styles", help="List styles")
+    p_styles.add_argument("--config", default="config.yaml")
 
     p_doctor = sub.add_parser("doctor", help="Check environment")
     p_doctor.add_argument("--config", default="config.yaml")
