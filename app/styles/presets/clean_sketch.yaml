@@ -1,0 +1,28 @@
+name: clean_sketch
+description: Clean educational hand-drawn sketch
+positive:
+  - hand-drawn
+  - graphite and ink sketch
+  - simple educational illustration
+  - clean readable silhouette
+  - natural imperfect strokes
+  - varied line weight
+  - subtle paper texture
+  - off-white paper
+  - minimal composition
+negative:
+  - photorealistic
+  - 3d
+  - CGI
+  - anime
+  - manga
+  - glossy digital art
+  - polished vector art
+  - perfect geometric lines
+  - excessive detail
+  - cinematic lighting
+  - complex background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024

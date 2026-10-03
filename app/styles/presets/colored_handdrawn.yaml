@@ -1,0 +1,25 @@
+name: colored_handdrawn
+description: Colored hand-drawn illustration
+positive:
+  - hand-drawn illustration
+  - colored pencils or markers
+  - textured strokes
+  - soft colors
+  - paper texture
+  - natural imperfect lines
+  - educational style
+negative:
+  - photorealistic
+  - 3d
+  - CGI
+  - anime
+  - manga
+  - glossy digital art
+  - perfect geometric lines
+  - hyper detailed
+  - cinematic lighting
+  - complex background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024

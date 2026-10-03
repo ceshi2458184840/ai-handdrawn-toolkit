@@ -1,0 +1,25 @@
+name: classroom_doodle
+description: Classroom-style hand-drawn illustration
+positive:
+  - classroom hand-drawn illustration
+  - simple educational sketch
+  - clear readable composition
+  - minimal background
+  - natural imperfect strokes
+  - suitable for teaching
+  - whiteboard or paper style
+negative:
+  - photorealistic
+  - 3d
+  - CGI
+  - anime
+  - manga
+  - glossy digital art
+  - perfect geometric lines
+  - hyper detailed
+  - cinematic lighting
+  - complex background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024

@@ -1,0 +1,25 @@
+name: ink_sketch
+description: Ink line drawing with clean strokes
+positive:
+  - black ink line drawing
+  - ink sketch
+  - clean strokes
+  - varied line weight
+  - off-white paper
+  - minimal composition
+  - natural hand-drawn imperfections
+negative:
+  - photorealistic
+  - 3d
+  - CGI
+  - anime
+  - manga
+  - glossy digital art
+  - perfect geometric lines
+  - hyper detailed
+  - cinematic lighting
+  - complex background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024

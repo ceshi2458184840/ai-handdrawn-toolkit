@@ -1,0 +1,25 @@
+default_provider: auto
+
+generation:
+  width: 1536
+  height: 1024
+  candidates: 2
+  timeout: 120
+
+style:
+  default: clean_sketch
+
+providers:
+  gemini:
+    enabled: true
+    api_key_env: GEMINI_API_KEY
+    model: gemini-2.5-flash-image
+  openai:
+    enabled: true
+    api_key_env: OPENAI_API_KEY
+    model: gpt-image-2.5
+  flux:
+    enabled: false
+    api_key_env: BFL_API_KEY
+  pollinations:
+    enabled: true

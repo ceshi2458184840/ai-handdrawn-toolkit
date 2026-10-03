@@ -1,0 +1,24 @@
+name: whiteboard
+description: Whiteboard style diagram or illustration
+positive:
+  - whiteboard drawing
+  - simple clean strokes
+  - minimal colors
+  - educational diagram
+  - clean readable composition
+  - marker sketch style
+negative:
+  - photorealistic
+  - 3d
+  - CGI
+  - anime
+  - manga
+  - glossy digital art
+  - polished vector art
+  - perfect geometric lines
+  - hyper detailed
+  - complex background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024
