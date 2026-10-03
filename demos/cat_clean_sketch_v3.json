@@ -1,0 +1,10 @@
+{
+  "provider": "pollinations",
+  "model": "pollinations-default",
+  "style": "clean_sketch",
+  "style_score": 6.0,
+  "handdrawn_score": 6.0,
+  "watermark": false,
+  "refined": false,
+  "rejected_candidates": []
+}

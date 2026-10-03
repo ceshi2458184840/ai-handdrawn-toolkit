@@ -1,0 +1,35 @@
+id: storybook
+name: Storybook
+description: Soft storybook illustration
+medium:
+  primary: digital painting
+  secondary: sketch line
+line_priority: low
+color_mode: full_color
+shading:
+  type: soft_paint
+  max_strength: 0.9
+paper:
+  type: none
+  grain: none
+preferred:
+  - children's illustration
+  - storybook
+  - soft painted forms
+  - warm palette
+  - friendly characters
+forbidden:
+  - photorealistic
+  - 3d render
+  - CGI
+  - anime
+  - manga
+  - glossy digital art
+  - perfect geometric lines
+  - hyper detailed
+  - cinematic lighting
+  - busy background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024

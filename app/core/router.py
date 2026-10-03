@@ -1,11 +1,40 @@
-"""Provider router with auto-fallback chain."""
+"""Provider router with auto-fallback chain and quality-aware selection."""
 from app.core.errors import HanddrawnError, ErrorCode
 from app.providers.pollinations import PollinationsProvider
 from app.providers.gemini import GeminiProvider
 from app.providers.openai_compatible import OpenAICompatibleProvider
 
 
-def build_providers(config):
+_PROFILES = {
+    "gemini": {
+        "quality_tier": "high",
+        "watermark_risk": "none",
+        "supports_reference": True,
+        "supports_edit": True,
+        "supports_negative": True,
+        "multiple_outputs": True,
+    },
+    "openai": {
+        "quality_tier": "high",
+        "watermark_risk": "none",
+        "supports_reference": False,
+        "supports_edit": True,
+        "supports_negative": True,
+        "multiple_outputs": True,
+    },
+    "pollinations": {
+        "quality_tier": "medium",
+        "watermark_risk": "possible",
+        "supports_reference": False,
+        "supports_edit": False,
+        "supports_negative": True,
+        "multiple_outputs": False,
+    },
+}
+
+
+def build_providers(config, quality_mode: str = "normal"):
+    """Build provider list ordered by quality and watermark risk."""
     providers = []
     # Gemini
     gemini_key = config.get("providers.gemini.api_key")

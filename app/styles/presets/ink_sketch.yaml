@@ -1,24 +1,36 @@
-name: ink_sketch
-description: Ink line drawing with clean strokes
-positive:
-  - black ink line drawing
-  - ink sketch
-  - clean strokes
-  - varied line weight
-  - off-white paper
-  - minimal composition
-  - natural hand-drawn imperfections
-negative:
+id: ink_sketch
+name: Ink Sketch
+description: Black ink line drawing with clean strokes
+medium:
+  primary: black ink
+  secondary: none
+line_priority: high
+color_mode: monochrome
+shading:
+  type: sparse_hatching
+  max_strength: 0.3
+paper:
+  type: white
+  grain: none
+preferred:
+  - fine ink
+  - black line
+  - confident contour
+  - variable stroke width
+  - sparse hatching
+  - white paper
+forbidden:
+  - watercolor
+  - oil painting
+  - storybook
   - photorealistic
-  - 3d
-  - CGI
+  - 3d render
+  - glossy digital art
   - anime
   - manga
-  - glossy digital art
-  - perfect geometric lines
-  - hyper detailed
   - cinematic lighting
-  - complex background
+  - excessive texture
+  - busy background
 recommended:
   aspect_ratio: "16:9"
   default_width: 1536

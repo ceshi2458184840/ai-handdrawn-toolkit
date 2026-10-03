@@ -1,8 +1,8 @@
-id: whiteboard
-name: Whiteboard
-description: Whiteboard marker diagram style
+id: doodle
+name: Doodle
+description: Casual friendly doodle style
 medium:
-  primary: whiteboard marker
+  primary: marker or pen
   secondary: none
 line_priority: high
 color_mode: limited_color
@@ -10,15 +10,14 @@ shading:
   type: none
   max_strength: 0.0
 paper:
-  type: whiteboard
-  grain: none
+  type: notebook
+  grain: subtle
 preferred:
-  - whiteboard drawing
-  - simple clean strokes
-  - minimal colors
-  - educational diagram
-  - clean readable composition
-  - marker sketch style
+  - casual marker
+  - loose simplified shapes
+  - friendly doodle
+  - simple lines
+  - playful composition
 forbidden:
   - photorealistic
   - 3d render
@@ -26,10 +25,12 @@ forbidden:
   - anime
   - manga
   - glossy digital art
-  - polished vector art
   - perfect geometric lines
   - hyper detailed
-  - complex background
+  - cinematic lighting
+  - busy background
+  - intentionally ugly
+  - messy scribble
 recommended:
   aspect_ratio: "16:9"
   default_width: 1536

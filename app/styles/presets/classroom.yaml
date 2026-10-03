@@ -1,0 +1,36 @@
+id: classroom
+name: Classroom
+description: Educational hand-drawn classroom illustration
+medium:
+  primary: marker or ink
+  secondary: light color accents
+line_priority: high
+color_mode: limited_color
+shading:
+  type: minimal
+  max_strength: 0.2
+paper:
+  type: white
+  grain: none
+preferred:
+  - educational hand-drawn illustration
+  - clear visual hierarchy
+  - simple explanatory composition
+  - clean line art
+  - minimal background
+  - professional classroom sketch
+forbidden:
+  - photorealistic
+  - 3d render
+  - CGI
+  - anime
+  - manga
+  - glossy digital art
+  - perfect vector art
+  - hyper detailed
+  - cinematic lighting
+  - complex background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024

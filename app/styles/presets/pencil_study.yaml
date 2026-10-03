@@ -1,0 +1,35 @@
+id: pencil_study
+name: Pencil Study
+description: Graphite pencil study with light shading
+medium:
+  primary: graphite pencil
+  secondary: none
+line_priority: high
+color_mode: monochrome
+shading:
+  type: controlled_hatching
+  max_strength: 0.5
+paper:
+  type: sketchbook
+  grain: visible
+preferred:
+  - graphite pencil
+  - pencil pressure
+  - light construction
+  - controlled hatching
+  - sketchbook
+  - monochrome
+forbidden:
+  - watercolor
+  - oil painting
+  - glossy digital art
+  - 3d render
+  - photorealism
+  - anime
+  - manga
+  - cinematic lighting
+  - busy background
+recommended:
+  aspect_ratio: "16:9"
+  default_width: 1536
+  default_height: 1024
