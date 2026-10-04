@@ -1,34 +1,34 @@
-# AI Handdrawn Toolkit
+# AI 手绘工具包
 
-Natural hand-drawn illustration generation toolkit for Linux / macOS / Windows.
+基于 Linux / macOS / Windows 的手绘风格 AI 插画生成工具。
 
-## Features
+## 特性
 
-- Multi-provider image generation (Gemini, OpenAI-compatible, Pollinations)
-- Hand-drawn style presets with quality gates
-- Multi-candidate generation with scoring
-- OpenAI-compatible custom endpoints
-- CLI + Agent skill manifest
+- 多 provider 生图（Gemini、OpenAI 兼容、Pollinations）
+- 手绘风格预设 + 质量门禁
+- 多候选生成 + 自动评分
+- OpenAI 兼容自定义端点
+- CLI + Agent Skill Manifest
 
-## Quick Start
+## 快速开始
 
 ```bash
 pip install -e .
 
-python -m app.cli generate "a cat sitting under a tree" --style clean_sketch
+python -m app.cli generate "一只猫坐在树下" --style clean_sketch
 
 python -m app.cli doctor
 ```
 
 ## Providers
 
-- `auto`: Gemini → OpenAI-compatible → Pollinations
-- `pollinations`: Free, no API key
-- `gemini`: Requires GEMINI_API_KEY
-- `openai`: Requires OPENAI_API_KEY
-- `custom`: Requires CUSTOM_API_KEY + CUSTOM_IMAGE_BASE_URL
+- `auto`: Gemini → OpenAI 兼容 → Pollinations
+- `pollinations`: 免费，无需 API key
+- `gemini`: 需要 GEMINI_API_KEY
+- `openai`: 需要 OPENAI_API_KEY
+- `custom`: 需要 CUSTOM_API_KEY + CUSTOM_IMAGE_BASE_URL
 
-## Styles
+## 样式
 
 - clean_sketch
 - pencil_study
@@ -40,12 +40,12 @@ python -m app.cli doctor
 - doodle
 - colored_handdrawn
 
-## Configuration
+## 配置
 
-Copy `config.example.yaml` to `config.yaml` and set API keys in `.env`.
+复制 `config.example.yaml` 为 `config.yaml`，在 `.env` 中设置 API key。
 
-## License
+## 许可
 
 MIT
 
-See [SKILL.md](SKILL.md) for Agent integration.
+详见 [SKILL.md](SKILL.md) 获取 Agent 集成说明。
