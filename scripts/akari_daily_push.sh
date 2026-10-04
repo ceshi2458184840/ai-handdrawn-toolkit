@@ -18,15 +18,14 @@ if [[ -z $(git status --porcelain) ]]; then
     exit 0
 fi
 
-# 用 gh CLI（阿清专用密钥）拉取最新远程变更
-gh repo sync 2>/dev/null || git fetch origin main 2>/dev/null || true
+# 用 gh CLI（阿清专用密钥）拉取
+git fetch origin main 2>/dev/null || true
 
-# 添加所有变更，commit（使用本地 git config 的作者名）
+# 添加所有变更，commit
 git add -A
 git commit -m "akari auto sync $(date +%Y-%m-%d)" 2>/dev/null || true
 
-# 用阿清专用 gh token 推送
-gh repo sync 2>> "$LOG_FILE" && \
+# 用 gh credential helper（阿清专用密钥）推送
+git push origin main 2>> "$LOG_FILE" && \
   echo "[$TIMESTAMP] ✅ 推送成功 ($(git rev-parse --short HEAD))" >> "$LOG_FILE" || \
-  echo "[$TIMESTAMP] ❌ 推送失败，尝试 git push..." >> "$LOG_FILE" && \
-  git push origin main 2>> "$LOG_FILE"
+  echo "[$TIMESTAMP] ❌ 推送失败" >> "$LOG_FILE"
