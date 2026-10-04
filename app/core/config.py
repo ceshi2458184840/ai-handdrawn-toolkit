@@ -1,114 +1,76 @@
 """Configuration loading and validation."""
 import os
+import copy
 import yaml
 from pathlib import Path
-from typing import Any
-import copy
+from app.core.errors import HanddrawnError, ErrorCode
 
 
 DEFAULT_CONFIG = {
-    "default_provider": "auto",
-    "generation": {
-        "width": 1536,
-        "height": 1024,
-        "candidates": 2,
-        "timeout": 120,
-    },
-    "style": {
-        "default": "clean_sketch",
-    },
+    "default_style": "clean_sketch",
+    "width": 1024,
+    "height": 768,
+    "candidates": 2,
     "providers": {
-        "gemini": {
-            "enabled": True,
-            "api_key_env": "GEMINI_API_KEY",
-            "model": "gemini-2.5-flash-image",
-        },
-        "openai": {
-            "enabled": True,
-            "api_key_env": "OPENAI_API_KEY",
-            "model": "gpt-image-2.5",
-        },
-        "flux": {
-            "enabled": False,
-            "api_key_env": "BFL_API_KEY",
-        },
-        "pollinations": {
-            "enabled": True,
-        },
-        "custom": {
-            "enabled": False,
-            "api_key_env": "CUSTOM_API_KEY",
-            "base_url_env": "CUSTOM_IMAGE_BASE_URL",
-            "model_env": "CUSTOM_IMAGE_MODEL",
-        },
+        "pollinations": {"enabled": True},
+        "gemini": {"enabled": True, "api_key_env": "GEMINI_API_KEY"},
+        "openai": {"enabled": False, "api_key_env": "OPENAI_API_KEY"},
+        "custom": {"enabled": False, "api_key_env": "CUSTOM_API_KEY", "base_url_env": "CUSTOM_IMAGE_BASE_URL", "model_env": "CUSTOM_IMAGE_MODEL"},
     },
 }
 
 
 class Config:
-    def __init__(self, config_path: str | None = None):
-        # Deep copy to avoid mutating DEFAULT_CONFIG
-        self.config = copy.deepcopy(DEFAULT_CONFIG)
-        self._load_config(config_path)
+    def __init__(self, path: str = "config.yaml"):
+        self._data = copy.deepcopy(DEFAULT_CONFIG)
+        self._path = path
+        self._load_file(path)
         self._load_env()
 
-    def _load_config(self, path: str | None):
-        if path and Path(path).exists():
-            with open(path, "r") as f:
-                user_config = yaml.safe_load(f)
-            self._deep_merge(self.config, user_config)
+    def _load_file(self, path: str):
+        p = Path(path)
+        if not p.exists():
+            return
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                overrides = yaml.safe_load(f) or {}
+            self._deep_merge(self._data, overrides)
+        except Exception as e:
+            raise HanddrawnError(ErrorCode.CONFIG_ERROR, f"Failed to load config: {e}")
 
     def _load_env(self):
-        # Load provider API keys from environment
-        for provider_name, provider_config in self.config.get("providers", {}).items():
-            if "api_key_env" in provider_config:
-                env_var = provider_config["api_key_env"]
-                if env_var in os.environ:
-                    provider_config["api_key"] = os.environ[env_var]
-            # Support env-based base_url and model for custom provider
-            if provider_name == "custom":
-                if "base_url_env" in provider_config:
-                    env_var = provider_config.pop("base_url_env")
-                    if env_var in os.environ:
-                        provider_config["base_url"] = os.environ[env_var]
-                if "model_env" in provider_config:
-                    env_var = provider_config.pop("model_env")
-                    if env_var in os.environ:
-                        provider_config["model"] = os.environ[env_var]
+        prov = self._data.setdefault("providers", {})
+        for name in ("gemini", "openai", "custom"):
+            section = prov.setdefault(name, {})
+            key_env = section.pop("api_key_env", None)
+            if key_env and not section.get("api_key"):
+                section["api_key"] = os.getenv(key_env)
+            base_env = section.pop("base_url_env", None)
+            if base_env and not section.get("base_url"):
+                section["base_url"] = os.getenv(base_env)
+            model_env = section.pop("model_env", None)
+            if model_env and not section.get("model"):
+                section["model"] = os.getenv(model_env)
 
-    def _deep_merge(self, base: dict, override: dict):
-        for key, value in override.items():
-            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-                self._deep_merge(base[key], value)
-            else:
-                base[key] = value
-
-    def get(self, key: str, default: Any = None) -> Any:
-        keys = key.split(".")
-        value = self.config
-        for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
+    def get(self, path: str, default=None):
+        parts = path.split(".")
+        cur = self._data
+        for p in parts:
+            if isinstance(cur, dict):
+                cur = cur.get(p)
             else:
                 return default
-        return value
+            if cur is None:
+                return default
+        return cur if cur is not None else default
 
-    @property
-    def default_provider(self) -> str:
-        return self.get("default_provider", "auto")
+    def to_dict(self):
+        return copy.deepcopy(self._data)
 
-    @property
-    def default_style(self) -> str:
-        return self.get("style.default", "clean_sketch")
 
-    @property
-    def candidates(self) -> int:
-        return self.get("generation.candidates", 2)
-
-    @property
-    def width(self) -> int:
-        return self.get("generation.width", 1536)
-
-    @property
-    def height(self) -> int:
-        return self.get("generation.height", 1024)
+def _deep_merge(base: dict, overrides: dict):
+    for k, v in overrides.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v

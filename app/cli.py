@@ -3,6 +3,8 @@ import argparse
 import sys
 import json
 import time
+import os
+import tempfile
 from app.core.config import Config
 from app.core.router import resolve_provider, build_providers
 from app.core.prompt_compiler import PromptCompiler
@@ -14,19 +16,23 @@ from app.quality.vision_judge import judge_with_gemini
 from app.core.errors import HanddrawnError, ErrorCode
 
 
+def _log(msg: str):
+    print(msg, file=sys.stderr)
+
+
 def _print_candidate(idx, status, reason, score=None):
     if status == "PASS":
-        mark = "✓ PASS"
+        mark = "PASS"
     elif status == "REJECT":
-        mark = "✗ REJECT"
+        mark = "REJECT"
     else:
-        mark = "? REVIEW"
-    line = f"Candidate #{idx}  {mark}"
+        mark = "REVIEW"
+    line = f"Candidate #{idx} {mark}"
     if reason:
-        line += f"  {reason}"
+        line += f" {reason}"
     if score is not None:
-        line += f"  score: {score:.1f}"
-    print(f"  {line}")
+        line += f" score={score:.1f}"
+    _log(line)
 
 
 def _generate_with_retry(provider, prompt, negative, width, height, max_attempts=2):
@@ -54,28 +60,55 @@ def _generate_with_retry(provider, prompt, negative, width, height, max_attempts
 
 
 def _safe_filename(prompt: str, style: str) -> str:
-    """Generate a deterministic, filesystem-safe filename."""
-    safe = prompt.replace(" ", "_").replace("/", "_").replace("\\", "_")[:40]
-    return f"generated/{style}_{safe}.png"
+    safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in prompt).strip().replace(" ", "_")[:40]
+    return f"{style}_{safe}.png"
+
+
+def _resolve_output_path(args, style: str) -> str:
+    base = args.output_dir or getattr(args, "output", None) or "."
+    if args.output:
+        return args.output
+    fname = _safe_filename(args.prompt, style)
+    return os.path.join(base, fname)
+
+
+def _vision_style_pass(style: str, prompt: str, img_data: bytes, vision_key: str) -> tuple[bool, str]:
+    """Vision-based style gate with graceful fallback."""
+    try:
+        vr = judge_with_gemini(img_data, vision_key, timeout=60)
+    except Exception:
+        sc = check_style_gate(style, prompt)
+        return sc["pass"], f"vision_error_fallback({','.join(sc.get('violations', [])[:2])})"
+    score = None
+    for key in ("final", "handdrawn"):
+        val = vr.get(key)
+        if isinstance(val, (int, float)):
+            score = float(val)
+            break
+    if score is None:
+        sc = check_style_gate(style, prompt)
+        return sc["pass"], f"vision_unparsable_fallback({','.join(sc.get('violations', [])[:2])})"
+    return score >= 6, f"vision_score={score:.1f}"
 
 
 def cmd_generate(args):
     config = Config(args.config)
     compiler = PromptCompiler(StyleLoader())
-    style = args.style or config.default_style
+    style = args.style or config.get("default_style", "clean_sketch")
     positive, negative = compiler.compile(args.prompt, style=style)
     providers = resolve_provider(args.provider, config)
 
-    width = args.width or config.width
-    height = args.height or config.height
-    # Use explicit 0 as "no candidates" -> default to 1
+    width = args.width or config.get("width", 1024)
+    height = args.height or config.get("height", 768)
     if args.candidates is not None and args.candidates < 1:
         candidates_needed = 1
     else:
-        candidates_needed = args.candidates or config.candidates
+        candidates_needed = args.candidates or config.get("candidates", 2)
     max_rounds = 2
 
     vision_key = config.get("providers.gemini.api_key")
+    out_path = _resolve_output_path(args, style)
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
     results = []
     rejections = []
@@ -86,24 +119,22 @@ def cmd_generate(args):
             try:
                 imgs = _generate_with_retry(provider, positive, negative, width, height)
             except HanddrawnError as e:
-                print(f"⚠️  {provider.name} failed: {e.message}")
+                _log(f"WARN {provider.name} failed: {e.message}")
                 if e.suggestion:
-                    print(f"   Suggestion: {e.suggestion}")
+                    _log(f"  Suggestion: {e.suggestion}")
                 continue
             except Exception as e:
-                print(f"⚠️  {provider.name} unexpected error: {e}")
+                _log(f"WARN {provider.name} unexpected error: {e}")
                 continue
 
             for img in imgs:
                 idx = len(results) + len(rejections) + 1
 
-                # Gate 0: file integrity
                 if len(img.data) < 1000:
                     rejections.append({"candidate": idx, "reason": "INVALID_IMAGE"})
                     _print_candidate(idx, "REJECT", "INVALID_IMAGE")
                     continue
 
-                # Gate 1: watermark
                 wm, wm_detail = is_watermarked(img.data, vision_api_key=vision_key)
                 if wm:
                     reason = "PROVIDER_WATERMARK"
@@ -111,25 +142,12 @@ def cmd_generate(args):
                     _print_candidate(idx, "REJECT", reason)
                     continue
 
-                # Gate 2: style mismatch (vision-based if available)
-                if vision_key:
-                    vision_result = judge_with_gemini(img.data, vision_key)
-                    style_match = vision_result.get("style_match", 5)
-                    if style_match < 6:
-                        reason = f"STYLE_MISMATCH (vision score {style_match}/10)"
-                        rejections.append({"candidate": idx, "reason": reason})
-                        _print_candidate(idx, "REJECT", reason)
-                        continue
-                else:
-                    # Fallback to prompt-based check
-                    style_check = check_style_gate(style, positive)
-                    if not style_check["pass"]:
-                        reason = f"STYLE_MISMATCH ({', '.join(style_check['violations'][:3])})"
-                        rejections.append({"candidate": idx, "reason": reason})
-                        _print_candidate(idx, "REJECT", reason)
-                        continue
+                style_pass, style_reason = _vision_style_pass(style, positive, img.data, vision_key)
+                if not style_pass:
+                    rejections.append({"candidate": idx, "reason": "STYLE_MISMATCH", "detail": style_reason})
+                    _print_candidate(idx, "REJECT", f"STYLE_MISMATCH ({style_reason})")
+                    continue
 
-                # Gate 3: rendering mismatch (heuristic)
                 try:
                     q = heuristic_score(img.data)
                 except Exception:
@@ -140,7 +158,6 @@ def cmd_generate(args):
                     _print_candidate(idx, "REJECT", reason)
                     continue
 
-                # Pass
                 results.append((img, q))
                 _print_candidate(idx, "PASS", "OK", q.get("final_score", 0) * 10)
                 if len(results) >= candidates_needed:
@@ -149,39 +166,27 @@ def cmd_generate(args):
                 break
 
     if not results:
-        print("❌ All candidates rejected. Run `python -m app.cli doctor` to check config.")
+        _log("ERROR All candidates rejected. Run `python -m app.cli doctor` to check config.")
         sys.exit(1)
 
-    # Select winner
     if len(results) == 1:
         best_img, best_q = results[0]
         best_score = best_q.get("final_score", 0) * 10
-        print(f"\n✓ Selected best candidate (auto, only candidate)")
     else:
-        scored = []
-        for img, q in results:
-            scored.append((q.get("final_score", 0) * 10, img, q))
-        scored.sort(key=lambda x: x[0], reverse=True)
+        scored = sorted(
+            [(q.get("final_score", 0) * 10, img, q) for img, q in results],
+            key=lambda x: x[0],
+            reverse=True,
+        )
         best_score, best_img, best_meta = scored[0]
-        print("\nCandidate scores:")
-        for idx, (sc, img, meta) in enumerate(scored, 1):
-            print(f"  Candidate #{idx}  {sc:.1f}/10")
-        print(f"\n✓ Selected best candidate ({best_score:.1f}/10)")
 
-    # Optional refinement if score < 7.8 (only for providers that support editing)
     refined = False
-    if best_score < 7.8 and vision_key:
-        print("⚠️  Best score < 7.8, attempting one-pass refinement...")
-        # Find a provider that supports editing for refinement
+    if best_score < 7.8:
         edit_provider = None
         for p in providers:
             if getattr(p, "supports_editing", False):
                 edit_provider = p
                 break
-        if not edit_provider:
-            # Fall back to first available provider with a simpler prompt
-            edit_provider = providers[0] if providers else None
-        
         if edit_provider:
             try:
                 refined_prompt = (
@@ -194,24 +199,18 @@ def cmd_generate(args):
                     edit_provider, refined_prompt, negative, width, height
                 )
                 if refined_imgs:
-                    refined_img = refined_imgs[0]
-                    wm2, _ = is_watermarked(refined_img.data, vision_api_key=vision_key)
+                    wm2, _ = is_watermarked(refined_imgs[0].data, vision_api_key=vision_key)
                     if not wm2:
-                        best_img = refined_img
+                        best_img = refined_imgs[0]
                         refined = True
-                        print("✓ Refinement succeeded")
                     else:
-                        print("✗ Refinement produced watermark, keeping original")
+                        _log("WARN Refinement produced watermark, keeping original")
             except Exception as e:
-                print(f"✗ Refinement failed: {e}")
+                _log(f"WARN Refinement failed: {e}")
 
-    out = args.output or _safe_filename(args.prompt, style)
-    with open(out, "wb") as f:
+    with open(out_path, "wb") as f:
         f.write(best_img.data)
-    print(f"Saved: {out}")
-    print(f"Provider: {best_img.provider} | Model: {best_img.model}")
 
-    # Output metadata
     meta = {
         "provider": best_img.provider,
         "model": best_img.model,
@@ -222,21 +221,23 @@ def cmd_generate(args):
         "refined": refined,
         "rejected_candidates": rejections,
     }
-    meta_path = out.rsplit(".", 1)[0] + ".json"
+    meta_path = out_path.rsplit(".", 1)[0] + ".json"
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2, default=str)
-    print(f"Metadata: {meta_path}")
+
+    # stdout 只输出结果路径，Agent/管道可解析
+    print(out_path)
+    print(meta_path, file=sys.stderr)
 
 
 def cmd_providers(args):
-    config = Config(args.config)
     print("Available providers:")
     profiles = {
-        "auto": "Gemini → OpenAI → Custom → Pollinations",
+        "auto": "Gemini -> OpenAI -> Custom -> Pollinations",
         "pollinations": "Free fallback (watermark risk: possible)",
         "gemini": "High quality (requires GEMINI_API_KEY)",
         "openai": "High quality (requires OPENAI_API_KEY)",
-        "flux": "Not implemented yet",
+        "custom": "OpenAI-compatible endpoint (requires CUSTOM_API_KEY)",
     }
     for name, desc in profiles.items():
         print(f"  {name}: {desc}")
@@ -253,7 +254,7 @@ def cmd_styles(args):
 
 def cmd_doctor(args):
     config = Config(args.config)
-    print("AI Handdrawn Toolkit Doctor\n")
+    _log("AI Handdrawn Toolkit Doctor")
     checks = []
     try:
         import PIL  # noqa
@@ -269,6 +270,8 @@ def cmd_doctor(args):
     checks.append(("Gemini API", "OK" if gemini_key else "NOT CONFIGURED"))
     openai_key = config.get("providers.openai.api_key")
     checks.append(("OpenAI API", "OK" if openai_key else "NOT CONFIGURED"))
+    custom_key = config.get("providers.custom.api_key") or os.getenv("CUSTOM_API_KEY")
+    checks.append(("Custom API", "OK" if custom_key else "NOT CONFIGURED"))
     try:
         providers = build_providers(config)
         checks.append(("Pollinations", "OK" if providers else "UNAVAILABLE"))
@@ -281,8 +284,8 @@ def cmd_doctor(args):
     except Exception as e:
         checks.append(("Styles", f"ERROR: {e}"))
     for name, status in checks:
-        print(f"  {name}: {status}")
-    print("\nREADY (Pollinations fallback available)")
+        _log(f"  {name}: {status}")
+    _log("READY (Pollinations fallback available)")
 
 
 def main():
@@ -297,6 +300,7 @@ def main():
     p_gen.add_argument("--height", type=int, default=None)
     p_gen.add_argument("--candidates", type=int, default=None)
     p_gen.add_argument("--output", default=None)
+    p_gen.add_argument("--output-dir", default=None)
     p_gen.add_argument("--config", default="config.yaml")
 
     p_prov = sub.add_parser("providers", help="List providers")

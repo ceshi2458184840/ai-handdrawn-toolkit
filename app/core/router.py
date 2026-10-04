@@ -1,122 +1,42 @@
-"""Provider router with auto-fallback chain and quality-aware selection."""
-from app.core.errors import HanddrawnError, ErrorCode
+"""Provider resolution."""
 from app.providers.pollinations import PollinationsProvider
 from app.providers.gemini import GeminiProvider
 from app.providers.openai_compatible import OpenAICompatibleProvider
-
-
-_PROFILES = {
-    "gemini": {
-        "quality_tier": "high",
-        "watermark_risk": "none",
-        "supports_reference": True,
-        "supports_edit": True,
-        "supports_negative": True,
-        "multiple_outputs": True,
-    },
-    "openai": {
-        "quality_tier": "high",
-        "watermark_risk": "none",
-        "supports_reference": False,
-        "supports_edit": True,
-        "supports_negative": True,
-        "multiple_outputs": True,
-    },
-    "custom": {
-        "quality_tier": "unknown",
-        "watermark_risk": "unknown",
-        "supports_reference": False,
-        "supports_edit": False,
-        "supports_negative": True,
-        "multiple_outputs": True,
-    },
-    "pollinations": {
-        "quality_tier": "medium",
-        "watermark_risk": "possible",
-        "supports_reference": False,
-        "supports_edit": False,
-        "supports_negative": True,
-        "multiple_outputs": False,
-    },
-}
-
-
-def build_providers(config, quality_mode: str = "normal"):
-    """Build provider list ordered by quality and watermark risk."""
-    providers = []
-    # Gemini
-    gemini_key = config.get("providers.gemini.api_key")
-    if gemini_key:
-        providers.append(
-            GeminiProvider(
-                api_key=gemini_key,
-                model=config.get("providers.gemini.model", "gemini-2.5-flash-image"),
-            )
-        )
-    # OpenAI direct
-    openai_key = config.get("providers.openai.api_key")
-    if openai_key:
-        providers.append(
-            OpenAICompatibleProvider(
-                api_key=openai_key,
-                base_url=config.get("providers.openai.base_url", "https://api.openai.com/v1"),
-                model=config.get("providers.openai.model", "gpt-image-2.5"),
-            )
-        )
-    # Custom OpenAI-compatible endpoint
-    custom_key = config.get("providers.custom.api_key")
-    custom_url = config.get("providers.custom.base_url")
-    custom_model = config.get("providers.custom.model")
-    if custom_key and custom_url and custom_model:
-        providers.append(
-            OpenAICompatibleProvider(
-                api_key=custom_key, base_url=custom_url, model=custom_model
-            )
-        )
-    # Pollinations fallback
-    if config.get("providers.pollinations.enabled", True):
-        providers.append(PollinationsProvider())
-    return providers
+from app.core.errors import HanddrawnError, ErrorCode
 
 
 def resolve_provider(name: str, config):
+    name = (name or "auto").lower()
+    providers = build_providers(config)
     if name == "auto":
-        return build_providers(config)
-    if name == "pollinations":
-        return [PollinationsProvider()]
-    if name == "gemini":
-        key = config.get("providers.gemini.api_key")
-        if not key:
-            raise HanddrawnError(
-                ErrorCode.AUTH_ERROR,
-                "Gemini provider selected but GEMINI_API_KEY is missing.",
-                "Set GEMINI_API_KEY or use --provider pollinations.",
-            )
-        return [
-            GeminiProvider(
-                api_key=key,
-                model=config.get("providers.gemini.model", "gemini-2.5-flash-image"),
-            )
-        ]
-    if name == "openai":
-        key = config.get("providers.openai.api_key")
-        base_url = config.get("providers.openai.base_url", "https://api.openai.com/v1")
-        model = config.get("providers.openai.model", "gpt-image-2.5")
-        if not key:
-            raise HanddrawnError(
-                ErrorCode.AUTH_ERROR,
-                "OpenAI provider selected but OPENAI_API_KEY is missing.",
-                "Set OPENAI_API_KEY.",
-            )
-        return [OpenAICompatibleProvider(api_key=key, base_url=base_url, model=model)]
-    if name == "flux":
-        raise HanddrawnError(
-            ErrorCode.INVALID_REQUEST,
-            "FLUX provider is not implemented yet.",
-            "Use pollinations or gemini.",
-        )
-    raise HanddrawnError(
-        ErrorCode.INVALID_REQUEST,
-        f"Unknown provider: {name}",
-        "Use auto, pollinations, gemini, or openai.",
-    )
+        return providers
+    mapping = {p.name: p for p in providers}
+    if name not in mapping:
+        raise ValueError(f"{name.upper()} provider is not available. Available: {list(mapping.keys())}")
+    return [mapping[name]]
+
+
+def build_providers(config):
+    out = []
+    prov_cfg = config.get("providers", {})
+
+    def _try_append(provider):
+        try:
+            out.append(provider)
+        except HanddrawnError:
+            pass
+        except Exception:
+            pass
+
+    if prov_cfg.get("pollinations", {}).get("enabled"):
+        out.append(PollinationsProvider())
+    if prov_cfg.get("gemini", {}).get("enabled"):
+        _try_append(GeminiProvider(api_key=(prov_cfg.get("gemini", {}).get("api_key") or "")))
+    if prov_cfg.get("openai", {}).get("enabled"):
+        _try_append(OpenAICompatibleProvider(api_key=(prov_cfg.get("openai", {}).get("api_key") or ""), base_url=prov_cfg.get("openai", {}).get("base_url"), model=prov_cfg.get("openai", {}).get("model"), name="openai"))
+    if prov_cfg.get("custom", {}).get("enabled"):
+        c = prov_cfg.get("custom", {})
+        _try_append(OpenAICompatibleProvider(api_key=(c.get("api_key") or ""), base_url=c.get("base_url"), model=c.get("model"), name="custom"))
+    if not out:
+        out.append(PollinationsProvider())
+    return out

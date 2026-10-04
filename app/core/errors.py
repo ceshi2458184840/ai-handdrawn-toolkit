@@ -4,6 +4,7 @@ from enum import Enum
 
 class ErrorCode(Enum):
     AUTH_ERROR = "AUTH_ERROR"
+    CONFIG_ERROR = "CONFIG_ERROR"
     RATE_LIMIT = "RATE_LIMIT"
     TIMEOUT = "TIMEOUT"
     NETWORK_ERROR = "NETWORK_ERROR"
