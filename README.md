@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="./README.md">🇨🇳 简体中文</a> | <a href="./README_ZH.md">🇨🇳 中文备选</a> | <a href="./README_EN.md">🇬🇧 English</a>
+</p>
+
 # 🎨 AI Handdrawn Toolkit — 工程化 Skill
 
 ## 项目定位
@@ -54,6 +58,7 @@ ai-handdrawn-toolkit/
 │   ├── test_cli.py                  # stdout/stderr 隔离与 exit code 单元测试
 │   └── test_styles.py               # Prompt 动态增强校验测试
 ├── README.md                        # 中文主文档 (用户默认阅读)
+├── README_ZH.md                     # 中文文档备选
 ├── README_EN.md                     # 英文文档 (英文用户专属)
 ├── manifest.json                    # AI Agent Skill 标准契约声明
 └── SKILL.md                         # 本技能文档
@@ -114,7 +119,7 @@ ai-handdrawn-toolkit/
   "success": true,
   "data": {
     "png_path": "/path/to/sketch_[hash].png",
-    "svg_path": "/path/to/sketch_[hash].svg",  # 当 vectorize=true 时存在
+    "svg_path": "/path/to/sketch_[hash].svg",
     "style_used": "pencil_sketch",
     "enhanced_prompt": "用户输入的 prompt + 风格后缀"
   }
@@ -133,7 +138,7 @@ ai-handdrawn-toolkit/
 ### 日志时 stderr (人类可读)
 ```
 [14:23:45] [INFO] Initializing sketch generation pipeline...
-[14:23:46] [INFO] Enhanced Prompt: architectural sketch of a modern villa, masterpiece, (architectural pen and ink sketch:1.3), precise ink hatching, cross-hatching shading, raw pen strokes, clean white paper background...
+[14:23:46] [INFO] Enhanced Prompt: architectural sketch of a modern villa...
 [14:23:47] [INFO] Applying physical paper texture and graphite shading shader...
 [14:23:48] [INFO] Executing Spline vectorization pipeline (PNG -> SVG)...
 ```
@@ -152,7 +157,6 @@ dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "tenacity>=8.2.0",
-    "vtracer>=0.6.0",
     "Pillow>=10.0.0",
     "opencv-python>=4.8.0",
     "numpy>=1.24.0",
@@ -167,17 +171,3 @@ MIT License - 完全开源，供生产使用
 ## 版本
 
 当前版本: `0.2.0`
-
-## 修订记录
-
-### v0.2.0 (2025-06-17)
-- 物理级纹理着色器 (`shading.py`) 新增石墨颗粒与纸张正片叠底
-- 高精度矢量化引擎 (`vectorizer.py`) 强化线稿对比度 + Spline 样条曲线
-- 完善风格引擎 (`styles.py`) 采用 `MasterStylePreset` 三层控制网
-- 增强异常处理 (`exceptions.py`) 统一防御性异常层级
-- 清理死代码，优化日志隔离与参数校验
-- 完成冒烟测试套件 (`tests/`)
-- 更新 README.md / README_EN.md 双语文档
-
-### v0.1.0
-- 初始版本，基础 CLI 与 MCP 支持
